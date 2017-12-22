@@ -18,6 +18,7 @@ program
   .option('-f, --find [symbol]', 'Find specific coin data with coin symbol (can be a comma seperated list)', list, [])
   .option('-t, --top [index]', 'Show the top coins ranked from 1 - [index] according to the market cap', null)
   .option('-H, --humanize [enable]', 'Show market cap as a humanized number, default true', true)
+  .option('-C, --columns [column number]', 'Splits results into N columns', '1')
   .parse(process.argv)
 
 const convert = program.convert.toUpperCase()
@@ -27,6 +28,8 @@ if (availableCurrencies.indexOf(convert) === -1) {
 }
 const find = program.find
 const top = !isNaN(program.top) && +program.top > 0 ? +program.top : (find.length > 0 ? 1500 : 10)
+const columns = +program.columns
+const defaultHeader = ['Rank', 'Coin', `Price (${convert})`, 'Change (24H)', 'Change (1H)', `Market Cap (${convert})`].map(title => title.yellow);
 const humanizeIsEnabled = program.humanize !== 'false'
 const table = new Table({
   chars: {
@@ -46,7 +49,7 @@ const table = new Table({
     'right-mid': '-',
     'middle': '│'
   },
-  head: ['Rank', 'Coin', `Price (${convert})`, 'Change (24H)', 'Change (1H)', `Market Cap (${convert})`].map(title => title.yellow),
+  head: defaultHeader,
   colWidths: [6, 14, 15, 15, 15, 20]
 })
 
@@ -65,6 +68,7 @@ const sourceUrl = `https://api.coinmarketcap.com/v1/ticker/?limit=${top}&convert
 axios.get(sourceUrl)
 .then(function (response) {
   spinner.stop()
+  const records = [];
   response.data
     .filter(record => {
       if (find.length > 0) {
@@ -90,11 +94,21 @@ axios.get(sourceUrl)
         displayedMarketCap
       ]
     })
-    .forEach(record => table.push(record))
-  if (table.length === 0) {
+    .forEach(record => records.push(record))
+  if (records.length === 0) {
     console.log('We are not able to find coins matching your keywords'.red)
   } else {
     console.log(`Data source from coinmarketcap.com at ${new Date().toLocaleTimeString()}`)
+    if (columns > 1) {
+      for(var i = 1; i < columns; i++) {
+        table.options.head = table.options.head.concat(defaultHeader);
+      }
+      for(var i = 0; i < records.length; i+=columns) {
+        table.push(records.slice(i, i+columns).reduce(function( a,rec ) { a.push(...rec); return a; }, []));
+      }
+    } else {
+      records.forEach(record => table.push(record))
+    }
     console.log(table.toString())
   }
 })
